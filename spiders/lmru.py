@@ -12,17 +12,20 @@ class LmruSpider(scrapy.Spider):
         self.start_urls = [f"https://www.castorama.ru/catalogsearch/result/?q={kwargs.get('query')}"]
 
     def parse(self, response: HtmlResponse):
-        links = response.xpath("//a[@class='product-card__name ga-product-card-name']")
+        next_page = response.xpath('//a[@class="next i-next"]')
+        if next_page:
+            yield response.follow(next_page[0], callback=self.parse)
+
+        links = response.xpath('//a[contains(@class, "product-card__name")]/@href')
         for link in links:
             yield response.follow(link, callback=self.parse_ads)
 
 
     def parse_ads(self, response: HtmlResponse):
         loader = ItemLoader(item=JobparserItem(), response=response)
-        loader.add_value('_id', response.url, re='-(\d+)\/$')
-        loader.add_xpath('name', "//div[@class = 'product-essential__name hide-min-small']//text()")
-        loader.add_xpath('price', "//span[@class = 'price']//text()")
-        loader.add_xpath('photos', "//img[contains(@class, 'top-slide__img')]/@data-src")
-        loader.add_value('url', response.url)
+        loader.add_xpath('title', '//h1[@itemprop="name"]/text()')
+        loader.add_xpath('photos', '//li[contains(@class, "top-slide")]/div/img[last()]/@data-src')
+        loader.add_xpath('price', '//span[@class="price"]/span/span[1]/text()')
+        loader.add_value('link', response.url)
+        loader.add_xpath('characteristics', '//div[@id="specifications"]/dl/*[contains(@class, "specs-table__attribute")]//text()')
         yield loader.load_item()
-
